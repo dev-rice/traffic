@@ -6,16 +6,16 @@ import (
 	"math/rand"
 
 	"github.com/donutmonger/traffic/color"
-	"github.com/donutmonger/traffic/vector"
+	"github.com/go-gl/mathgl/mgl32"
 )
 
 const humanReactionTime = 250 * time.Millisecond
 
 type Car struct {
-	Position       vector.Vector2
-	Velocity       vector.Vector2
-	TargetVelocity vector.Vector2
-	Acceleration   vector.Vector2
+	Position       mgl32.Vec2
+	Velocity       mgl32.Vec2
+	TargetVelocity mgl32.Vec2
+	Acceleration   mgl32.Vec2
 
 	Color        color.Color
 	ReactionTime time.Duration
@@ -23,12 +23,12 @@ type Car struct {
 	TimeSinceAction time.Duration
 }
 
-func New(position vector.Vector2, targetVelocity vector.Vector2) *Car {
+func New(position mgl32.Vec2, targetVelocity mgl32.Vec2) *Car {
 	return &Car{
 		Position:       position,
-		Velocity:       vector.Vector2{X: 0, Y: 0},
+		Velocity:       mgl32.Vec2{0, 0},
 		TargetVelocity: targetVelocity,
-		Acceleration:   vector.Vector2{X: 0, Y: 0},
+		Acceleration:   mgl32.Vec2{0, 0},
 
 		Color:           getRandomColor(),
 		ReactionTime:    humanReactionTime,
