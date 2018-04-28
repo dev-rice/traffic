@@ -16,6 +16,7 @@ type Car struct {
 	Velocity       mgl32.Vec2
 	TargetVelocity mgl32.Vec2
 	Acceleration   mgl32.Vec2
+	Length         float32
 
 	Color        color.Color
 	ReactionTime time.Duration
@@ -29,6 +30,7 @@ func New(position mgl32.Vec2, targetVelocity mgl32.Vec2) *Car {
 		Velocity:       mgl32.Vec2{0, 0},
 		TargetVelocity: targetVelocity,
 		Acceleration:   mgl32.Vec2{0, 0},
+		Length:         4.8,
 
 		Color:           getRandomColor(),
 		ReactionTime:    humanReactionTime,

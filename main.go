@@ -6,7 +6,7 @@ import (
 
 	"container/list"
 
-	"time"
+	"math"
 
 	"github.com/donutmonger/traffic/car"
 	"github.com/donutmonger/traffic/color"
@@ -62,7 +62,7 @@ func main() {
 	glfw.WindowHint(glfw.ContextVersionMinor, 1)
 	glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
 	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
-	window, err := glfw.CreateWindow(800, 600, "Cube", nil, nil)
+	window, err := glfw.CreateWindow(1400, 1000, "Cube", nil, nil)
 	if err != nil {
 		logrus.Fatal(err)
 	}
@@ -110,16 +110,11 @@ func main() {
 	gl.ClearColor(0.15, 0.15, 0.15, 1.0)
 
 	cars := list.New()
-	cars.PushBack(car.New(mgl32.Vec2{-0.9, 0.0}, mgl32.Vec2{0.0, 0.0}))
-	cars.PushBack(car.New(mgl32.Vec2{-0.8, 0.0}, mgl32.Vec2{0.0, 0.0}))
-	cars.PushBack(car.New(mgl32.Vec2{-0.7, 0.0}, mgl32.Vec2{0.0, 0.0}))
-	cars.PushBack(car.New(mgl32.Vec2{-0.6, 0.0}, mgl32.Vec2{0.0, 0.0}))
-	cars.PushBack(car.New(mgl32.Vec2{-0.5, 0.0}, mgl32.Vec2{0.0, 0.0}))
-	cars.PushBack(car.New(mgl32.Vec2{-0.4, 0.0}, mgl32.Vec2{0.0, 0.0}))
-	cars.PushBack(car.New(mgl32.Vec2{-0.3, 0.0}, mgl32.Vec2{0.0, 0.0}))
-	cars.PushBack(car.New(mgl32.Vec2{-0.2, 0.0}, mgl32.Vec2{0.0, 0.0}))
-	cars.PushBack(car.New(mgl32.Vec2{-0.1, 0.0}, mgl32.Vec2{0.0, 0.0}))
-	cars.PushBack(car.New(mgl32.Vec2{0.0, 0.0}, mgl32.Vec2{0.2, 0.0}))
+	for i := 20; i >= 0; i-- {
+		var x float32 = 15.0*float32(i) + 450
+		cars.PushBack(car.New(mgl32.Vec2{-x, 0}, mgl32.Vec2{0, 0}))
+	}
+	cars.PushBack(car.New(mgl32.Vec2{-435, 0.0}, mgl32.Vec2{30, 0.0}))
 
 	previousTime := glfw.GetTime()
 
@@ -130,29 +125,48 @@ func main() {
 		elapsed := seconds - previousTime
 		previousTime = seconds
 
+		// Update cars
 		i := 0
 		current := cars.Front()
 		for current != nil {
 			// TODO
-			// Feedback loop with distance to next car
 			// Don't rely on frame timer
 			c := current.Value.(*car.Car)
 
 			next := current.Next()
 			if next != nil {
 				n := next.Value.(*car.Car)
-				c.TargetVelocity = n.Velocity
-				if n.Velocity.X() != 0.0 {
-					c.AddTimeWaited(time.Duration(1000*elapsed) * time.Millisecond)
-				}
-			} else {
-				c.AddTimeWaited(1 * time.Second)
-			}
+				netDistance := n.Position.X() - c.Position.X() - n.Length
+				approachingRate := c.Velocity.X() - n.Velocity.X()
 
-			if c.Velocity.X() >= c.TargetVelocity.X() {
-				c.Acceleration = mgl32.Vec2{0, 0}
-			} else if c.HasReacted() {
-				c.Acceleration = mgl32.Vec2{0.2, 0}
+				var desiredVelocity float32 = 30
+				var minimumSpacing float32 = 7.5
+				var desiredTimeHeadwaySeconds float32 = 1.5
+				var maximumAcceleration float32 = 4.0
+				var comfortableBrakingDeceleration float32 = 6.0
+				var accelerationExponent float32 = 4.0
+
+				var firstComponent float32 = float32(math.Pow(float64(c.Velocity.X()/desiredVelocity), float64(accelerationExponent)))
+				var sStar float32 = minimumSpacing + (c.Velocity.X() * desiredTimeHeadwaySeconds) + ((c.Velocity.X() * approachingRate) / (2 * float32(math.Sqrt(float64(maximumAcceleration*comfortableBrakingDeceleration)))))
+				var secondComponent float32 = float32(math.Pow(float64(sStar/netDistance), 2.0))
+				var acceleration float32 = maximumAcceleration * (1 - firstComponent - secondComponent)
+
+				c.Acceleration = mgl32.Vec2{acceleration, 0}
+
+			} else {
+				// Lead Car
+				if stopLeadCar {
+					if c.Velocity.X() > 0 {
+						c.Acceleration = mgl32.Vec2{-6, 0}
+					} else {
+						c.Acceleration = mgl32.Vec2{0, 0}
+						c.Velocity = mgl32.Vec2{0, 0}
+					}
+				} else if startLeadCar && c.Velocity.Len() < c.TargetVelocity.Len() {
+					c.Acceleration = mgl32.Vec2{3, 0}
+				} else {
+					c.Acceleration = mgl32.Vec2{0, 0}
+				}
 			}
 
 			c.Velocity = c.Velocity.Add(c.Acceleration.Mul(float32(elapsed)))
@@ -172,10 +186,11 @@ func main() {
 				colorArray := []float32{c.R, c.G, c.B, c.A}
 				gl.Uniform4fv(colorUniformLoc, 1, &colorArray[0])
 			},
-			func(t mgl32.Vec2) {
+			func(t mgl32.Vec2, length float32) {
+				var scale float32 = 1.0 / 500.0
 				transform := mgl32.Mat3FromCols(
-					mgl32.Vec3([3]float32{0.03, 0.00, t.X()}),
-					mgl32.Vec3([3]float32{0.00, 0.02, t.Y()}),
+					mgl32.Vec3([3]float32{scale * length, 0.00, scale * t.X()}),
+					mgl32.Vec3([3]float32{0.00, scale * length * 0.667, scale * t.Y()}),
 					mgl32.Vec3([3]float32{0.00, 0.00, 1.0}))
 				gl.UniformMatrix3fv(transformUniformLoc, 1, false, &transform[0])
 			},
@@ -189,21 +204,34 @@ func main() {
 	}
 }
 
-func drawCars(cars *list.List, setColor func(c color.Color), applyTranslation func(t mgl32.Vec2), draw func()) {
+func drawCars(cars *list.List, setColor func(c color.Color), applyTranslation func(mgl32.Vec2, float32), draw func()) {
 	current := cars.Front()
 	for current != nil {
 		c := current.Value.(*car.Car)
 		setColor(c.Color)
-		applyTranslation(c.Position)
+		applyTranslation(c.Position, c.Length)
 		draw()
 		current = current.Next()
 	}
 }
 
+var stopLeadCar = false
+var startLeadCar = false
+
 func keyCallback(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 	if key == glfw.KeyQ && action == glfw.Press {
 		logrus.Info("Exiting...")
 		w.SetShouldClose(true)
+	}
+	if key == glfw.KeyS && action == glfw.Press {
+		logrus.Info("Stopping lead car")
+		stopLeadCar = true
+		startLeadCar = false
+	}
+	if key == glfw.KeyG && action == glfw.Press {
+		logrus.Info("Starting lead car")
+		startLeadCar = true
+		stopLeadCar = false
 	}
 }
 
