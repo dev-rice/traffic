@@ -24,14 +24,11 @@
 #   go-tests = true
 #   unused-packages = true
 
+ignored = ["github.com/go-gl/glfw/*"]
 
 [[constraint]]
   branch = "master"
   name = "github.com/go-gl/gl"
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/go-gl/glfw"
 
 [[constraint]]
   branch = "master"

@@ -9,7 +9,6 @@ import (
 	"math"
 
 	"github.com/donutmonger/traffic/car"
-	"github.com/donutmonger/traffic/color"
 	"github.com/go-gl/gl/v4.1-core/gl"
 	"github.com/go-gl/glfw/v3.2/glfw"
 	"github.com/go-gl/mathgl/mgl32"
@@ -37,7 +36,8 @@ uniform vec4 color;
 out vec4 outColor;
 
 void main() {
-    outColor = color;
+    //outColor = color;
+	outColor = vec4(1.0, 0.0, 1.0, 1.0);
 }
 ` + "\x00"
 
@@ -62,12 +62,13 @@ func main() {
 	glfw.WindowHint(glfw.ContextVersionMinor, 1)
 	glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
 	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
-	window, err := glfw.CreateWindow(1400, 1000, "Cube", nil, nil)
+	window, err := glfw.CreateWindow(1920, 1080, "Cube", nil, nil)
 	if err != nil {
 		logrus.Fatal(err)
 	}
 	window.MakeContextCurrent()
 	window.SetKeyCallback(keyCallback)
+	window.SetScrollCallback(scrollCallback)
 
 	if err := gl.Init(); err != nil {
 		logrus.Fatal(err)
@@ -88,6 +89,7 @@ func main() {
 	gl.UniformMatrix3fv(transformUniformLoc, 1, false, &transform[0])
 
 	colorUniformLoc := gl.GetUniformLocation(program, gl.Str("color\x00"))
+	colorArray := []float32{0, 0, 0, 0}
 
 	gl.BindFragDataLocation(program, 0, gl.Str("outColor\x00"))
 
@@ -110,11 +112,11 @@ func main() {
 	gl.ClearColor(0.15, 0.15, 0.15, 1.0)
 
 	cars := list.New()
-	for i := 20; i >= 0; i-- {
-		var x float32 = 15.0*float32(i) + 450
+	for i := 120; i >= 0; i-- {
+		var x float32 = 15.0*float32(i) + 300
 		cars.PushBack(car.New(mgl32.Vec2{-x, 0}, mgl32.Vec2{0, 0}))
 	}
-	cars.PushBack(car.New(mgl32.Vec2{-435, 0.0}, mgl32.Vec2{30, 0.0}))
+	cars.PushBack(car.New(mgl32.Vec2{-285, 0.0}, mgl32.Vec2{30, 0.0}))
 
 	previousTime := glfw.GetTime()
 
@@ -146,10 +148,10 @@ func main() {
 				var comfortableBrakingDeceleration float32 = 6.0
 				var accelerationExponent float32 = 4.0
 
-				var firstComponent float32 = float32(math.Pow(float64(c.Velocity.X()/desiredVelocity), float64(accelerationExponent)))
-				var sStar float32 = minimumSpacing + (c.Velocity.X() * desiredTimeHeadwaySeconds) + ((c.Velocity.X() * approachingRate) / (2 * float32(math.Sqrt(float64(maximumAcceleration*comfortableBrakingDeceleration)))))
-				var secondComponent float32 = float32(math.Pow(float64(sStar/netDistance), 2.0))
-				var acceleration float32 = maximumAcceleration * (1 - firstComponent - secondComponent)
+				firstComponent := float32(math.Pow(float64(c.Velocity.X()/desiredVelocity), float64(accelerationExponent)))
+				sStar := minimumSpacing + (c.Velocity.X() * desiredTimeHeadwaySeconds) + ((c.Velocity.X() * approachingRate) / (2 * float32(math.Sqrt(float64(maximumAcceleration*comfortableBrakingDeceleration)))))
+				secondComponent := float32(math.Pow(float64(sStar/netDistance), 2.0))
+				acceleration := maximumAcceleration * (1 - firstComponent - secondComponent)
 
 				c.Acceleration = mgl32.Vec2{acceleration, 0}
 
@@ -181,22 +183,25 @@ func main() {
 		gl.UseProgram(program)
 		gl.BindVertexArray(vao)
 
-		drawCars(cars,
-			func(c color.Color) {
-				colorArray := []float32{c.R, c.G, c.B, c.A}
-				gl.Uniform4fv(colorUniformLoc, 1, &colorArray[0])
-			},
-			func(t mgl32.Vec2, length float32) {
-				var scale float32 = 1.0 / 500.0
-				transform := mgl32.Mat3FromCols(
-					mgl32.Vec3([3]float32{scale * length, 0.00, scale * t.X()}),
-					mgl32.Vec3([3]float32{0.00, scale * length * 0.667, scale * t.Y()}),
-					mgl32.Vec3([3]float32{0.00, 0.00, 1.0}))
-				gl.UniformMatrix3fv(transformUniformLoc, 1, false, &transform[0])
-			},
-			func() {
-				gl.DrawArrays(gl.TRIANGLES, 0, 6)
-			})
+		current = cars.Front()
+		for current != nil {
+			c := current.Value.(*car.Car)
+
+			colorArray[0] = c.Color.R
+			colorArray[1] = c.Color.G
+			colorArray[2] = c.Color.B
+			colorArray[3] = c.Color.A
+			gl.Uniform4fv(colorUniformLoc, 1, &colorArray[0])
+
+			transform = mgl32.Mat3FromCols(
+				mgl32.Vec3([3]float32{scale * c.Length, 0.00, scale * c.Position.X()}),
+				mgl32.Vec3([3]float32{0.00, scale * c.Length * 0.667, scale * c.Position.Y()}),
+				mgl32.Vec3([3]float32{0.00, 0.00, 1.0}))
+			gl.UniformMatrix3fv(transformUniformLoc, 1, false, &transform[0])
+
+			gl.DrawArrays(gl.TRIANGLES, 0, 6)
+			current = current.Next()
+		}
 
 		// Maintenance
 		window.SwapBuffers()
@@ -204,19 +209,11 @@ func main() {
 	}
 }
 
-func drawCars(cars *list.List, setColor func(c color.Color), applyTranslation func(mgl32.Vec2, float32), draw func()) {
-	current := cars.Front()
-	for current != nil {
-		c := current.Value.(*car.Car)
-		setColor(c.Color)
-		applyTranslation(c.Position, c.Length)
-		draw()
-		current = current.Next()
-	}
-}
-
 var stopLeadCar = false
 var startLeadCar = false
+var scale float32 = 1 / 400.0
+
+const minScale float32 = 1 / 3000.0
 
 func keyCallback(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 	if key == glfw.KeyQ && action == glfw.Press {
@@ -232,6 +229,15 @@ func keyCallback(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action,
 		logrus.Info("Starting lead car")
 		startLeadCar = true
 		stopLeadCar = false
+	}
+}
+
+func scrollCallback(w *glfw.Window, xoff float64, yoff float64) {
+	var scrollSensitivity float32 = 1.0 / 20.0
+	scale += scrollSensitivity * float32(yoff) * scale
+
+	if scale < minScale {
+		scale = minScale
 	}
 }
 

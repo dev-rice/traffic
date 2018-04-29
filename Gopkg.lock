@@ -9,12 +9,6 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/go-gl/glfw"
-  packages = ["v3.2/glfw"]
-  revision = "46a8d530c3268b31eeb1310f30fe42be1cae98f2"
-
-[[projects]]
-  branch = "master"
   name = "github.com/go-gl/mathgl"
   packages = ["mgl32"]
   revision = "5ab0e04e1f55a10f3a71b1fccc60ca2ee9a0bc02"
@@ -49,6 +43,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "105504f5966a7381a8f2cc3b04d0a18d66d3053deabd45713ece23456ea2fc09"
+  inputs-digest = "a7f86b5e583829479da31bac839886bd5a8995ef6b1c4a4d86c1d5d199825919"
   solver-name = "gps-cdcl"
   solver-version = 1

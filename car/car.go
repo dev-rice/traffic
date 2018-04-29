@@ -9,8 +9,6 @@ import (
 	"github.com/go-gl/mathgl/mgl32"
 )
 
-const humanReactionTime = 250 * time.Millisecond
-
 type Car struct {
 	Position       mgl32.Vec2
 	Velocity       mgl32.Vec2
@@ -18,10 +16,7 @@ type Car struct {
 	Acceleration   mgl32.Vec2
 	Length         float32
 
-	Color        color.Color
-	ReactionTime time.Duration
-
-	TimeSinceAction time.Duration
+	Color *color.Color
 }
 
 func New(position mgl32.Vec2, targetVelocity mgl32.Vec2) *Car {
@@ -32,23 +27,13 @@ func New(position mgl32.Vec2, targetVelocity mgl32.Vec2) *Car {
 		Acceleration:   mgl32.Vec2{0, 0},
 		Length:         4.8,
 
-		Color:           getRandomColor(),
-		ReactionTime:    humanReactionTime,
-		TimeSinceAction: 0 * time.Second,
+		Color: getRandomColor(),
 	}
 }
 
-func (c *Car) AddTimeWaited(t time.Duration) {
-	c.TimeSinceAction += t
-}
-
-func (c Car) HasReacted() bool {
-	return c.TimeSinceAction >= c.ReactionTime
-}
-
-func getRandomColor() color.Color {
+func getRandomColor() *color.Color {
 	rand.Seed(int64(time.Now().Nanosecond()))
-	return color.Color{R: getRandomColorValue(), G: getRandomColorValue(), B: getRandomColorValue(), A: 1.0}
+	return &color.Color{R: getRandomColorValue(), G: getRandomColorValue(), B: getRandomColorValue(), A: 1.0}
 }
 
 func getRandomColorValue() float32 {
