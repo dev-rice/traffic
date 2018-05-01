@@ -195,15 +195,15 @@ func main() {
 			gl.Uniform4fv(colorUniformLoc, 1, &colorArray[0])
 
 			view = mgl32.Mat3FromCols(
-				mgl32.Vec3{1, 0, -cameraPosition.X()},
-				mgl32.Vec3{0, 1, -cameraPosition.Y()},
+				mgl32.Vec3{scale, 0, -cameraPosition.X()},
+				mgl32.Vec3{0, scale, -cameraPosition.Y()},
 				mgl32.Vec3{0, 0, 1},
 			)
 			gl.UniformMatrix3fv(viewUniformLoc, 1, false, &view[0])
 
 			transform = mgl32.Mat3FromCols(
-				mgl32.Vec3{scale * c.Length, 0.00, scale * c.Position.X()},
-				mgl32.Vec3{0.00, scale * c.Length * 0.667, scale * c.Position.Y()},
+				mgl32.Vec3{c.Length, 0.00, scale * c.Position.X()},
+				mgl32.Vec3{0.00, c.Length * 0.667, scale * c.Position.Y()},
 				mgl32.Vec3{0.00, 0.00, 1.0})
 			gl.UniformMatrix3fv(transformUniformLoc, 1, false, &transform[0])
 
@@ -254,7 +254,7 @@ func scrollCallback(w *glfw.Window, xoff float64, yoff float64) {
 	var scrollSensitivity float32 = 1.0 / 20.0
 	scale += scrollSensitivity * float32(yoff) * scale
 
-	cameraPosition = cameraPosition.Add(mgl32.Vec2{float32(-xoff), 0})
+	cameraPosition = cameraPosition.Add(mgl32.Vec2{scale * float32(-xoff), 0})
 
 	if scale < minScale {
 		scale = minScale
