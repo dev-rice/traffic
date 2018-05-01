@@ -19,10 +19,11 @@ var vertexShader = `
 #version 330
 
 in vec2 position;
+uniform mat3 view;
 uniform mat3 transformation;
 
 void main() {
-    vec3 position_temp = vec3(position, 1.0) * transformation;
+    vec3 position_temp = vec3(position, 1.0) * view * transformation;
 
     gl_Position = vec4(position_temp.xy, 0.0, 1.0);
 }
@@ -61,7 +62,7 @@ func main() {
 	glfw.WindowHint(glfw.ContextVersionMinor, 1)
 	glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
 	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
-	window, err := glfw.CreateWindow(1920, 1080, "Cube", nil, nil)
+	window, err := glfw.CreateWindow(1280, 720, "Cube", nil, nil)
 	if err != nil {
 		logrus.Fatal(err)
 	}
@@ -83,12 +84,16 @@ func main() {
 	}
 	gl.UseProgram(program)
 
+	view := mgl32.Ident3()
+	viewUniformLoc := gl.GetUniformLocation(program, gl.Str("view\x00"))
+	gl.UniformMatrix3fv(viewUniformLoc, 1, false, &view[0])
+
 	transform := mgl32.Ident3()
 	transformUniformLoc := gl.GetUniformLocation(program, gl.Str("transformation\x00"))
 	gl.UniformMatrix3fv(transformUniformLoc, 1, false, &transform[0])
 
 	colorUniformLoc := gl.GetUniformLocation(program, gl.Str("color\x00"))
-	colorArray := []float32{0, 0, 0, 0}
+	colorArray := [4]float32{0, 0, 0, 0}
 
 	gl.BindFragDataLocation(program, 0, gl.Str("outColor\x00"))
 
@@ -186,19 +191,24 @@ func main() {
 		for current != nil {
 			c := current.Value.(*car.Car)
 
-			colorArray[0] = c.Color.R
-			colorArray[1] = c.Color.G
-			colorArray[2] = c.Color.B
-			colorArray[3] = c.Color.A
+			colorArray = [4]float32{c.Color.R, c.Color.G, c.Color.B, c.Color.A}
 			gl.Uniform4fv(colorUniformLoc, 1, &colorArray[0])
 
+			view = mgl32.Mat3FromCols(
+				mgl32.Vec3{1, 0, -cameraPosition.X()},
+				mgl32.Vec3{0, 1, -cameraPosition.Y()},
+				mgl32.Vec3{0, 0, 1},
+			)
+			gl.UniformMatrix3fv(viewUniformLoc, 1, false, &view[0])
+
 			transform = mgl32.Mat3FromCols(
-				mgl32.Vec3([3]float32{scale * c.Length, 0.00, scale * c.Position.X()}),
-				mgl32.Vec3([3]float32{0.00, scale * c.Length * 0.667, scale * c.Position.Y()}),
-				mgl32.Vec3([3]float32{0.00, 0.00, 1.0}))
+				mgl32.Vec3{scale * c.Length, 0.00, scale * c.Position.X()},
+				mgl32.Vec3{0.00, scale * c.Length * 0.667, scale * c.Position.Y()},
+				mgl32.Vec3{0.00, 0.00, 1.0})
 			gl.UniformMatrix3fv(transformUniformLoc, 1, false, &transform[0])
 
 			gl.DrawArrays(gl.TRIANGLES, 0, 6)
+
 			current = current.Next()
 		}
 
@@ -211,6 +221,7 @@ func main() {
 var stopLeadCar = false
 var startLeadCar = false
 var scale float32 = 1 / 400.0
+var cameraPosition = mgl32.Vec2{0, 0}
 
 const minScale float32 = 1 / 3000.0
 
@@ -229,15 +240,26 @@ func keyCallback(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action,
 		startLeadCar = true
 		stopLeadCar = false
 	}
+	if key == glfw.KeyRight && (action == glfw.Press || action == glfw.Repeat) {
+		logrus.Info(cameraPosition)
+		cameraPosition = cameraPosition.Add(mgl32.Vec2{2.0, 0})
+	}
+	if key == glfw.KeyLeft && (action == glfw.Press || action == glfw.Repeat) {
+		logrus.Info(cameraPosition)
+		cameraPosition = cameraPosition.Add(mgl32.Vec2{-2.0, 0})
+	}
 }
 
 func scrollCallback(w *glfw.Window, xoff float64, yoff float64) {
 	var scrollSensitivity float32 = 1.0 / 20.0
 	scale += scrollSensitivity * float32(yoff) * scale
 
+	cameraPosition = cameraPosition.Add(mgl32.Vec2{float32(-xoff), 0})
+
 	if scale < minScale {
 		scale = minScale
 	}
+
 }
 
 func newProgram(vertexShaderSource, fragmentShaderSource string) (uint32, error) {
