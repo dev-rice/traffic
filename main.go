@@ -8,6 +8,10 @@ import (
 
 	"math"
 
+	"time"
+
+	"runtime"
+
 	"github.com/donutmonger/traffic/car"
 	"github.com/go-gl/gl/v4.1-core/gl"
 	"github.com/go-gl/glfw/v3.2/glfw"
@@ -47,6 +51,10 @@ var planeVertices = []float32{
 	1.0, -1.0,
 	-1.0, -1.0,
 	-1.0, 1.0,
+}
+
+func init() {
+	runtime.LockOSThread()
 }
 
 func main() {
@@ -116,72 +124,73 @@ func main() {
 	}
 	cars.PushBack(car.New(mgl32.Vec2{-285, 0.0}, mgl32.Vec2{30, 0.0}))
 
-	previousTime := glfw.GetTime()
+	dt := 10 * time.Millisecond
+	physicsTicker := time.NewTicker(dt)
+	go func() {
+		for range physicsTicker.C {
+			// Update cars
+			i := 0
+			current := cars.Front()
+			for current != nil {
+				// TODO
+				// Don't rely on frame timer
+				c := current.Value.(*car.Car)
+
+				next := current.Next()
+				if next != nil {
+					n := next.Value.(*car.Car)
+					netDistance := n.Position.X() - c.Position.X() - n.Length
+					approachingRate := c.Velocity.X() - n.Velocity.X()
+
+					var desiredVelocity float32 = 30
+					var minimumSpacing float32 = 7.5
+					var desiredTimeHeadwaySeconds float32 = 1.5
+					var maximumAcceleration float32 = 4.0
+					var comfortableBrakingDeceleration float32 = 6.0
+					var accelerationExponent float32 = 4.0
+
+					firstComponent := float32(math.Pow(float64(c.Velocity.X()/desiredVelocity), float64(accelerationExponent)))
+					sStar := minimumSpacing + (c.Velocity.X() * desiredTimeHeadwaySeconds) + ((c.Velocity.X() * approachingRate) / (2 * float32(math.Sqrt(float64(maximumAcceleration*comfortableBrakingDeceleration)))))
+					secondComponent := float32(math.Pow(float64(sStar/netDistance), 2.0))
+					acceleration := maximumAcceleration * (1 - firstComponent - secondComponent)
+
+					c.Acceleration = mgl32.Vec2{acceleration, 0}
+
+				} else {
+					// Lead Car
+					if stopLeadCar {
+						if c.Velocity.X() > 0 {
+							c.Acceleration = mgl32.Vec2{-6, 0}
+						} else {
+							c.Acceleration = mgl32.Vec2{0, 0}
+							c.Velocity = mgl32.Vec2{0, 0}
+						}
+					} else if startLeadCar && c.Velocity.Len() < c.TargetVelocity.Len() {
+						c.Acceleration = mgl32.Vec2{3, 0}
+					} else {
+						c.Acceleration = mgl32.Vec2{0, 0}
+					}
+				}
+
+				c.Velocity = c.Velocity.Add(c.Acceleration.Mul(float32(dt.Seconds())))
+				c.Position = c.Position.Add(c.Velocity.Mul(float32(dt.Seconds())))
+
+				current = next
+
+				i++
+			}
+
+		}
+	}()
 
 	for !window.ShouldClose() {
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-
-		seconds := glfw.GetTime()
-		elapsed := seconds - previousTime
-		previousTime = seconds
-
-		// Update cars
-		i := 0
-		current := cars.Front()
-		for current != nil {
-			// TODO
-			// Don't rely on frame timer
-			c := current.Value.(*car.Car)
-
-			next := current.Next()
-			if next != nil {
-				n := next.Value.(*car.Car)
-				netDistance := n.Position.X() - c.Position.X() - n.Length
-				approachingRate := c.Velocity.X() - n.Velocity.X()
-
-				var desiredVelocity float32 = 30
-				var minimumSpacing float32 = 7.5
-				var desiredTimeHeadwaySeconds float32 = 1.5
-				var maximumAcceleration float32 = 4.0
-				var comfortableBrakingDeceleration float32 = 6.0
-				var accelerationExponent float32 = 4.0
-
-				firstComponent := float32(math.Pow(float64(c.Velocity.X()/desiredVelocity), float64(accelerationExponent)))
-				sStar := minimumSpacing + (c.Velocity.X() * desiredTimeHeadwaySeconds) + ((c.Velocity.X() * approachingRate) / (2 * float32(math.Sqrt(float64(maximumAcceleration*comfortableBrakingDeceleration)))))
-				secondComponent := float32(math.Pow(float64(sStar/netDistance), 2.0))
-				acceleration := maximumAcceleration * (1 - firstComponent - secondComponent)
-
-				c.Acceleration = mgl32.Vec2{acceleration, 0}
-
-			} else {
-				// Lead Car
-				if stopLeadCar {
-					if c.Velocity.X() > 0 {
-						c.Acceleration = mgl32.Vec2{-6, 0}
-					} else {
-						c.Acceleration = mgl32.Vec2{0, 0}
-						c.Velocity = mgl32.Vec2{0, 0}
-					}
-				} else if startLeadCar && c.Velocity.Len() < c.TargetVelocity.Len() {
-					c.Acceleration = mgl32.Vec2{3, 0}
-				} else {
-					c.Acceleration = mgl32.Vec2{0, 0}
-				}
-			}
-
-			c.Velocity = c.Velocity.Add(c.Acceleration.Mul(float32(elapsed)))
-			c.Position = c.Position.Add(c.Velocity.Mul(float32(elapsed)))
-
-			current = next
-
-			i++
-		}
 
 		// Render
 		gl.UseProgram(program)
 		gl.BindVertexArray(vao)
 
-		current = cars.Front()
+		current := cars.Front()
 		for current != nil {
 			c := current.Value.(*car.Car)
 
