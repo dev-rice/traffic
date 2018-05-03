@@ -12,6 +12,10 @@ import (
 
 	"math"
 
+	"os"
+
+	"strconv"
+
 	"github.com/donutmonger/traffic/car"
 	"github.com/go-gl/gl/v4.1-core/gl"
 	"github.com/go-gl/glfw/v3.2/glfw"
@@ -63,12 +67,24 @@ func main() {
 	}
 	defer glfw.Terminate()
 
+	windowWidth, err := strconv.Atoi(os.Getenv("WIDTH"))
+	if err != nil {
+		windowWidth = 1280
+	}
+
+	windowHeight, err := strconv.Atoi(os.Getenv("HEIGHT"))
+	if err != nil {
+		windowHeight = 720
+	}
+
+	logrus.Infof("Initializing window with size %dx%d", windowWidth, windowHeight)
+
 	glfw.WindowHint(glfw.Resizable, glfw.False)
 	glfw.WindowHint(glfw.ContextVersionMajor, 4)
 	glfw.WindowHint(glfw.ContextVersionMinor, 1)
 	glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
 	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
-	window, err := glfw.CreateWindow(1280, 720, "Cube", nil, nil)
+	window, err := glfw.CreateWindow(windowWidth, windowHeight, "Cube", nil, nil)
 	if err != nil {
 		logrus.Fatal(err)
 	}
@@ -128,36 +144,7 @@ func main() {
 	physicsTicker := time.NewTicker(dt)
 	go func() {
 		for range physicsTicker.C {
-			current := cars.Front()
-			for current != nil {
-				c := current.Value.(*car.Car)
-
-				next := current.Next()
-				if next != nil {
-					n := next.Value.(*car.Car)
-					c.Acceleration = calculateAccelerationIDM(c, n)
-				} else {
-					// Lead Car
-					if stopLeadCar {
-						if c.Velocity.X() > 0 {
-							c.Acceleration = mgl32.Vec2{-6, 0}
-						} else {
-							c.Acceleration = mgl32.Vec2{0, 0}
-							c.Velocity = mgl32.Vec2{0, 0}
-						}
-					} else if startLeadCar && c.Velocity.Len() < c.TargetVelocity.Len() {
-						c.Acceleration = mgl32.Vec2{3, 0}
-					} else {
-						c.Acceleration = mgl32.Vec2{0, 0}
-					}
-				}
-
-				c.Velocity = c.Velocity.Add(c.Acceleration.Mul(float32(dt.Seconds())))
-				c.Position = c.Position.Add(c.Velocity.Mul(float32(dt.Seconds())))
-
-				current = next
-			}
-
+			updateCars(cars, dt.Seconds())
 		}
 	}()
 
@@ -189,6 +176,38 @@ func main() {
 		// Maintenance
 		window.SwapBuffers()
 		glfw.PollEvents()
+	}
+}
+
+func updateCars(cars *list.List, dtSeconds float64) {
+	current := cars.Front()
+	for current != nil {
+		c := current.Value.(*car.Car)
+
+		next := current.Next()
+		if next != nil {
+			n := next.Value.(*car.Car)
+			c.Acceleration = calculateAccelerationIDM(c, n)
+		} else {
+			// Lead Car
+			if stopLeadCar {
+				if c.Velocity.X() > 0 {
+					c.Acceleration = mgl32.Vec2{-6, 0}
+				} else {
+					c.Acceleration = mgl32.Vec2{0, 0}
+					c.Velocity = mgl32.Vec2{0, 0}
+				}
+			} else if startLeadCar && c.Velocity.Len() < c.TargetVelocity.Len() {
+				c.Acceleration = mgl32.Vec2{3, 0}
+			} else {
+				c.Acceleration = mgl32.Vec2{0, 0}
+			}
+		}
+
+		c.Velocity = c.Velocity.Add(c.Acceleration.Mul(float32(dtSeconds)))
+		c.Position = c.Position.Add(c.Velocity.Mul(float32(dtSeconds)))
+
+		current = next
 	}
 }
 
@@ -235,12 +254,10 @@ func keyCallback(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action,
 		stopLeadCar = false
 	}
 	if key == glfw.KeyRight && (action == glfw.Press || action == glfw.Repeat) {
-		logrus.Info(cameraPosition)
-		cameraPosition = cameraPosition.Add(mgl32.Vec2{10.0, 0})
+		cameraPosition = cameraPosition.Add(mgl32.Vec2{15.0, 0})
 	}
 	if key == glfw.KeyLeft && (action == glfw.Press || action == glfw.Repeat) {
-		logrus.Info(cameraPosition)
-		cameraPosition = cameraPosition.Add(mgl32.Vec2{-10.0, 0})
+		cameraPosition = cameraPosition.Add(mgl32.Vec2{-15.0, 0})
 	}
 }
 
