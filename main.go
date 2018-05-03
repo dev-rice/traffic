@@ -19,13 +19,11 @@ var vertexShader = `
 #version 330
 
 in vec2 position;
-uniform mat3 view;
 uniform mat3 transformation;
 
 void main() {
-    vec3 position_temp = vec3(position, 1.0) * view * transformation;
-
-    gl_Position = vec4(position_temp.xy, 0.0, 1.0);
+    vec3 modelPos = vec3(position, 1.0) * transformation;
+	gl_Position = vec4(modelPos.xy, 0.0, 1.0);
 }
 ` + "\x00"
 
@@ -83,10 +81,6 @@ func main() {
 		logrus.Fatal(err)
 	}
 	gl.UseProgram(program)
-
-	view := mgl32.Ident3()
-	viewUniformLoc := gl.GetUniformLocation(program, gl.Str("view\x00"))
-	gl.UniformMatrix3fv(viewUniformLoc, 1, false, &view[0])
 
 	transform := mgl32.Ident3()
 	transformUniformLoc := gl.GetUniformLocation(program, gl.Str("transformation\x00"))
@@ -194,16 +188,9 @@ func main() {
 			colorArray = [4]float32{c.Color.R, c.Color.G, c.Color.B, c.Color.A}
 			gl.Uniform4fv(colorUniformLoc, 1, &colorArray[0])
 
-			view = mgl32.Mat3FromCols(
-				mgl32.Vec3{scale, 0, -cameraPosition.X()},
-				mgl32.Vec3{0, scale, -cameraPosition.Y()},
-				mgl32.Vec3{0, 0, 1},
-			)
-			gl.UniformMatrix3fv(viewUniformLoc, 1, false, &view[0])
-
 			transform = mgl32.Mat3FromCols(
-				mgl32.Vec3{c.Length, 0.00, scale * c.Position.X()},
-				mgl32.Vec3{0.00, c.Length * 0.667, scale * c.Position.Y()},
+				mgl32.Vec3{scale * c.Length, 0.00, scale * (c.Position.X() - cameraPosition.X())},
+				mgl32.Vec3{0.00, scale * c.Length * 0.667, scale * (c.Position.Y() - cameraPosition.Y())},
 				mgl32.Vec3{0.00, 0.00, 1.0})
 			gl.UniformMatrix3fv(transformUniformLoc, 1, false, &transform[0])
 
@@ -242,24 +229,20 @@ func keyCallback(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action,
 	}
 	if key == glfw.KeyRight && (action == glfw.Press || action == glfw.Repeat) {
 		logrus.Info(cameraPosition)
-		cameraPosition = cameraPosition.Add(mgl32.Vec2{2.0, 0})
+		cameraPosition = cameraPosition.Add(mgl32.Vec2{10.0, 0})
 	}
 	if key == glfw.KeyLeft && (action == glfw.Press || action == glfw.Repeat) {
 		logrus.Info(cameraPosition)
-		cameraPosition = cameraPosition.Add(mgl32.Vec2{-2.0, 0})
+		cameraPosition = cameraPosition.Add(mgl32.Vec2{-10.0, 0})
 	}
 }
 
 func scrollCallback(w *glfw.Window, xoff float64, yoff float64) {
 	var scrollSensitivity float32 = 1.0 / 20.0
 	scale += scrollSensitivity * float32(yoff) * scale
-
-	cameraPosition = cameraPosition.Add(mgl32.Vec2{scale * float32(-xoff), 0})
-
 	if scale < minScale {
 		scale = minScale
 	}
-
 }
 
 func newProgram(vertexShaderSource, fragmentShaderSource string) (uint32, error) {
