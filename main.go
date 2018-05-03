@@ -6,11 +6,11 @@ import (
 
 	"container/list"
 
-	"math"
-
 	"time"
 
 	"runtime"
+
+	"math"
 
 	"github.com/donutmonger/traffic/car"
 	"github.com/go-gl/gl/v4.1-core/gl"
@@ -128,34 +128,14 @@ func main() {
 	physicsTicker := time.NewTicker(dt)
 	go func() {
 		for range physicsTicker.C {
-			// Update cars
-			i := 0
 			current := cars.Front()
 			for current != nil {
-				// TODO
-				// Don't rely on frame timer
 				c := current.Value.(*car.Car)
 
 				next := current.Next()
 				if next != nil {
 					n := next.Value.(*car.Car)
-					netDistance := n.Position.X() - c.Position.X() - n.Length
-					approachingRate := c.Velocity.X() - n.Velocity.X()
-
-					var desiredVelocity float32 = 30
-					var minimumSpacing float32 = 7.5
-					var desiredTimeHeadwaySeconds float32 = 1.5
-					var maximumAcceleration float32 = 4.0
-					var comfortableBrakingDeceleration float32 = 6.0
-					var accelerationExponent float32 = 4.0
-
-					firstComponent := float32(math.Pow(float64(c.Velocity.X()/desiredVelocity), float64(accelerationExponent)))
-					sStar := minimumSpacing + (c.Velocity.X() * desiredTimeHeadwaySeconds) + ((c.Velocity.X() * approachingRate) / (2 * float32(math.Sqrt(float64(maximumAcceleration*comfortableBrakingDeceleration)))))
-					secondComponent := float32(math.Pow(float64(sStar/netDistance), 2.0))
-					acceleration := maximumAcceleration * (1 - firstComponent - secondComponent)
-
-					c.Acceleration = mgl32.Vec2{acceleration, 0}
-
+					c.Acceleration = calculateAccelerationIDM(c, n)
 				} else {
 					// Lead Car
 					if stopLeadCar {
@@ -176,8 +156,6 @@ func main() {
 				c.Position = c.Position.Add(c.Velocity.Mul(float32(dt.Seconds())))
 
 				current = next
-
-				i++
 			}
 
 		}
@@ -212,6 +190,26 @@ func main() {
 		window.SwapBuffers()
 		glfw.PollEvents()
 	}
+}
+
+func calculateAccelerationIDM(c *car.Car, n *car.Car) mgl32.Vec2 {
+	netDistance := n.Position.X() - c.Position.X() - n.Length
+	approachingRate := c.Velocity.X() - n.Velocity.X()
+
+	var desiredVelocity float32 = 30
+	var minimumSpacing float32 = 7.5
+	var desiredTimeHeadwaySeconds float32 = 1.5
+	var maximumAcceleration float32 = 4.0
+	var comfortableBrakingDeceleration float32 = 6.0
+	var accelerationExponent float32 = 4.0
+
+	firstComponent := float32(math.Pow(float64(c.Velocity.X()/desiredVelocity), float64(accelerationExponent)))
+	sStar := minimumSpacing + (c.Velocity.X() * desiredTimeHeadwaySeconds) + ((c.Velocity.X() * approachingRate) / (2 * float32(math.Sqrt(float64(maximumAcceleration*comfortableBrakingDeceleration)))))
+	secondComponent := float32(math.Pow(float64(sStar/netDistance), 2.0))
+	acceleration := maximumAcceleration * (1 - firstComponent - secondComponent)
+
+	return mgl32.Vec2{acceleration, 0}
+
 }
 
 var stopLeadCar = false
